@@ -1,25 +1,30 @@
 # Dynamic Group Chat Coding Task
 
-This project demonstrates a dynamic group chat coding task that involves reading data from CSV files and processing it to produce specific output. The code is designed to be easily adaptable for reading data from a production Oracle database using Entity Framework and LINQ.
+This project demonstrates a dynamic group chat coding task that involves converting Oracle PL/SQL code to .NET C# code. The code is designed to be easily adaptable for reading data from a production Oracle database using Entity Framework and LINQ.
 
 ## Features
 
-- Reads data from hardcoded CSV files.
-- Processes the data to produce a formatted output.
-- Designed to be easily adaptable for reading from an Oracle database.
-- Uses record types for data structures.
+- Reads data from hardcoded CSV files for testing.
+- Breaks down the converting for PL/SQL to C# into logical tasks.
+- Uses agents for orchestration, coding, review and running of code.
+- Verifies that output of testdata of produced logic matches expected input.
 
 ## Prerequisites
 
 - .NET SDK
 - Visual Studio Code or any other C# compatible IDE
+- At point of testing only GPT-4 model was working correctly. Issues with both 3.5-turbo and GPT-4o.
+  Configure endpoints by setting enviroment variables:
+  - Azure: AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT
+  - OpenAI: OPENAI_API_KEY
+     
 
 ## Setup
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/your-repo/dynamic-group-chat-coding-task.git
-    cd dynamic-group-chat-coding-task
+    git clone https://github.com/your-repo/multiagent-demo-dotnet.git
+    cd multiagent-demo-dotnet
     ```
 
 2. Open the project in Visual Studio Code:
@@ -69,7 +74,3 @@ Total Salary for Department 1: 115500
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
