@@ -56,3 +56,20 @@ This project demonstrates a dynamic group chat coding task that involves reading
 ## Example Output
 
 For Department 1, the expected output is:
+Emp ID: 201, Name: John Doe, Salary: 50000, Bonus: 5000
+Emp ID: 202, Name: Jane Smith, Salary: 55000, Bonus: 5500 
+Total Salary for Department 1: 115500
+
+
+## Future Enhancements
+
+- Implement logic to read data from a production Oracle database using Entity Framework.
+- Use LINQ to query the data from the Oracle database.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
