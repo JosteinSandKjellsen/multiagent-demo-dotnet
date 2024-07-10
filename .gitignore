@@ -1,0 +1,68 @@
+# .NET Core
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.nuget
+*.log
+*.user
+*.lock.json
+*.csproj.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+.history/
+*.code-workspace
+
+# Rider
+.idea/
+*.sln.iml
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Auto-generated files
+Generated_Code/
+
+# Logs
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Entity Framework
+Migrations/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# StyleCop
+StyleCopReport.xml
+
+# DotNet Interactive
+InteractiveService/
+
+# Coverage Reports
+coverage/
+*.coverage
+*.coveragexml
+
+# Others
+*.DS_Store
+*.swp
+*.bak
+*.tmp
