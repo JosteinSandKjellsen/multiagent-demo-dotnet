@@ -1,55 +1,13 @@
-﻿using AutoGen;
-using AutoGen.Core;
-using AutoGen.BasicSample;
+﻿using AutoGen.Core;
 using AutoGen.DotnetInteractive;
 using AutoGen.OpenAI;
 
-public partial class Dynamic_GroupChat_Coding_Task
+namespace AutoGen.BasicSample
 {
-    public static async Task RunAsync()
+    public partial class Dynamic_GroupChat_Coding_Task
     {
-        var instance = new Dynamic_GroupChat_Coding_Task();
-
-        var sqlFolderPath = Directory.GetCurrentDirectory();
-        var plsqlFilePath = Path.Combine(sqlFolderPath, "testdata-sql-plsql.sql");
-        var tablesFilePath = Path.Combine(sqlFolderPath, "testdata-sql-tables.sql");
-
-        var plsqlScript = await File.ReadAllTextAsync(plsqlFilePath);
-        var tablesScript = await File.ReadAllTextAsync(tablesFilePath);
-
-        var departmentsFilePath = Path.Combine(sqlFolderPath, "testdata-csv-departments.csv");
-        var employeesFilePath = Path.Combine(sqlFolderPath, "testdata-csv-employees.csv");
-        var salariesFilePath = Path.Combine(sqlFolderPath, "testdata-csv-salaries.csv");
-
-        var departmentsData = await File.ReadAllTextAsync(departmentsFilePath);
-        var employeesData = await File.ReadAllTextAsync(employeesFilePath);
-        var salariesData = await File.ReadAllTextAsync(salariesFilePath);
-
-        // setup dotnet interactive
-        var workDir = Path.Combine(Path.GetTempPath(), "InteractiveService");
-        if (!Directory.Exists(workDir))
-            Directory.CreateDirectory(workDir);
-
-        using var service = new InteractiveService(workDir);
-        var dotnetInteractiveFunctions = new DotnetInteractiveFunction(service);
-
-        await service.StartAsync(workDir, default);
-
-        var gptConfig = LLMConfiguration.GetAzureOpenAIGPT4();
-
-        var groupAdmin = new GPTAgent(
-            name: "groupAdmin",
-            systemMessage: "You are the admin of the group chat",
-            temperature: 0f,
-            config: gptConfig);
-
-        var userProxy = new UserProxyAgent(name: "user", defaultReply: GroupChatExtension.TERMINATE, humanInputMode: HumanInputMode.NEVER)
-            .RegisterPrintMessage();
-
-        // Create admin agent
-        var admin = new AssistantAgent(
-            name: "admin",
-            systemMessage: """
+        private const string GroupAdminSystemMessage = "You are the admin of the group chat";
+        private const string AdminSystemMessage = """
             You are a manager who takes coding problem from user and resolve problem by splitting them into small tasks and assign each task to the most appropriate agent.
             Here's available agents who you can assign task to:
             - coder: write dotnet code to resolve task
@@ -92,18 +50,8 @@ public partial class Dynamic_GroupChat_Coding_Task
             ```
 
             Your reply must contain one of [task|ask|summary] to indicate the type of your message.
-            """,
-            llmConfig: new ConversableAgentConfig
-            {
-                Temperature = 0,
-                ConfigList = [gptConfig],
-            })
-            .RegisterPrintMessage();
-
-        // create coder agent
-        var coderAgent = new GPTAgent(
-            name: "coder",
-            systemMessage: """
+        """;
+        private const string CoderSystemMessage = """
             You act as dotnet coder, you write dotnet code to resolve task. Once you finish writing code, ask runner to run the code for you.
             Here're some rules to follow on writing dotnet code:
             - put code between ```csharp and ```
@@ -123,15 +71,8 @@ public partial class Dynamic_GroupChat_Coding_Task
             ```
 
             If your code is incorrect, Fix the error and send the code again.
-            """,
-            config: gptConfig,
-            temperature: 0.4f)
-            .RegisterPrintMessage();
-
-        // code reviewer agent will review if code block from coder's reply satisfy the following conditions:
-        var codeReviewAgent = new GPTAgent(
-            name: "reviewer",
-            systemMessage: """
+        """;
+        private const string ReviewerSystemMessage = """
             You are a code reviewer who reviews code from coder. You need to check if the code satisfy the following conditions:
             - The reply from coder contains at least one code block, e.g ```csharp and ```
             - There's only one code block and it's csharp code block
@@ -153,76 +94,143 @@ public partial class Dynamic_GroupChat_Coding_Task
             comment: The code is inside main function. Please rewrite the code in top level statement.
             result: REJECTED
             ```
+        """;
 
-            """,
-            config: gptConfig,
-            temperature: 0f)
-            .RegisterPrintMessage();
-
-        // create runner agent
-        var runner = new AssistantAgent(
-            name: "runner",
-            defaultReply: "No code available, coder, write code please")
-            .RegisterDotnetCodeBlockExectionHook(interactiveService: service)
-            .RegisterMiddleware(async (msgs, option, agent, ct) =>
-            {
-                var mostRecentCoderMessage = msgs.LastOrDefault(x => x.From == "coder") ?? throw new Exception("No coder message found");
-                return await agent.GenerateReplyAsync([mostRecentCoderMessage], option, ct);
-            })
-            .RegisterPrintMessage();
-
-        var adminToCoderTransition = Transition.Create(admin, coderAgent, async (from, to, messages) =>
+        public async Task RunAsync()
         {
-            // the last message should be from admin
-            var lastMessage = messages.Last();
-            if (lastMessage.From != admin.Name)
-            {
-                return false;
-            }
+            var fileContents = await ReadAllRequiredFilesAsync();
+            var gptConfiguration = LLMConfiguration.GetAzureOpenAIGPT4();
 
-            return true;
-        });
-        var coderToReviewerTransition = Transition.Create(coderAgent, codeReviewAgent);
-        
-        var adminToRunnerTransition = Transition.Create(admin, runner, async (from, to, messages) =>
+            using InteractiveService interactiveService = await SetupInteractiveServiceAsync();
+            var dotnetInteractiveFunctions = new DotnetInteractiveFunction(interactiveService);
+
+            var agents = SetupAgents(gptConfiguration, interactiveService);
+            var workflow = SetupWorkflow(agents);
+
+            var groupChat = new GroupChat(
+                admin: agents.GroupAdmin,
+                members: new IAgent[] { agents.AdminAgent, agents.CoderAgent, agents.Runner, agents.CodeReviewAgent, agents.UserProxy },
+                workflow: workflow);
+
+            var groupChatManager = new GroupChatManager(groupChat);
+            await agents.UserProxy.SendAsync(groupChatManager, ConstructUserQuery(fileContents), maxRound: 30);
+        }
+
+        private record FileContents(string PlSqlScript, string TablesScript, string DepartmentsData, string EmployeesData, string SalariesData);
+
+        private async Task<FileContents> ReadAllRequiredFilesAsync()
         {
-            // the last message should be from admin
-            var lastMessage = messages.Last();
-            if (lastMessage.From != admin.Name)
+            var filePaths = new Dictionary<string, string>
             {
-                return false;
-            }
+                { "PlSql", "testdata-sql-plsql.sql" },
+                { "Tables", "testdata-sql-tables.sql" },
+                { "Departments", "testdata-csv-departments.csv" },
+                { "Employees", "testdata-csv-employees.csv" },
+                { "Salaries", "testdata-csv-salaries.csv" }
+            };
 
-            // the previous messages should contain a message from coder
-            var coderMessage = messages.FirstOrDefault(x => x.From == coderAgent.Name);
-            if (coderMessage is null)
-            {
-                return false;
-            }
+            var fileContents = await Task.WhenAll(filePaths.Select(async kvp =>
+                new KeyValuePair<string, string>(kvp.Key, await File.ReadAllTextAsync(kvp.Value))));
 
-            return true;
-        });
+            return new FileContents(
+                fileContents.First(kvp => kvp.Key == "PlSql").Value,
+                fileContents.First(kvp => kvp.Key == "Tables").Value,
+                fileContents.First(kvp => kvp.Key == "Departments").Value,
+                fileContents.First(kvp => kvp.Key == "Employees").Value,
+                fileContents.First(kvp => kvp.Key == "Salaries").Value
+            );
+        }
 
-        var runnerToAdminTransition = Transition.Create(runner, admin);
-
-        var reviewerToAdminTransition = Transition.Create(codeReviewAgent, admin);
-
-        var adminToUserTransition = Transition.Create(admin, userProxy, async (from, to, messages) =>
+        private async Task<InteractiveService> SetupInteractiveServiceAsync()
         {
-            // the last message should be from admin
-            var lastMessage = messages.Last();
-            if (lastMessage.From != admin.Name)
+            var workDir = Path.Combine(Path.GetTempPath(), "InteractiveService");
+            Directory.CreateDirectory(workDir);
+
+            var service = new InteractiveService(workDir);
+            await service.StartAsync(workDir, default);
+            return service;
+        }
+
+        private record AgentCollection(
+            IAgent GroupAdmin,
+            IAgent UserProxy,
+            IAgent AdminAgent,
+            IAgent CoderAgent,
+            IAgent CodeReviewAgent,
+            IAgent Runner
+        );
+
+        private AgentCollection SetupAgents(AzureOpenAIConfig gptConfiguration, InteractiveService interactiveService)
+        {
+            var groupAdmin = new GPTAgent(
+                name: "groupAdmin",
+                systemMessage: GroupAdminSystemMessage,
+                temperature: 0f,
+                config: gptConfiguration)
+                .RegisterPrintMessage();
+
+            var userProxy = new UserProxyAgent(name: "user", defaultReply: GroupChatExtension.TERMINATE, humanInputMode: HumanInputMode.NEVER)
+                .RegisterPrintMessage();
+
+            var adminAgent = new AssistantAgent(
+                name: "admin",
+                systemMessage: AdminSystemMessage,
+                llmConfig: new ConversableAgentConfig
+                {
+                    Temperature = 0,
+                    ConfigList = new[] { gptConfiguration },
+                })
+                .RegisterPrintMessage();
+
+            var coderAgent = new GPTAgent(
+                name: "coder",
+                systemMessage: CoderSystemMessage,
+                config: gptConfiguration,
+                temperature: 0.4f)
+                .RegisterPrintMessage();
+
+            var codeReviewAgent = new GPTAgent(
+                name: "reviewer",
+                systemMessage: ReviewerSystemMessage,
+                config: gptConfiguration,
+                temperature: 0f)
+                .RegisterPrintMessage();
+
+            var runner = new AssistantAgent(
+                name: "runner",
+                defaultReply: "No code available, coder, write code please")
+                .RegisterDotnetCodeBlockExectionHook(interactiveService: interactiveService)
+                .RegisterMiddleware(async (msgs, option, agent, ct) =>
+                {
+                    var mostRecentCoderMessage = msgs.LastOrDefault(x => x.From == "coder") ?? throw new Exception("No coder message found");
+                    return await agent.GenerateReplyAsync(new[] { mostRecentCoderMessage }, option, ct);
+                })
+                .RegisterPrintMessage();
+
+            return new AgentCollection(groupAdmin, userProxy, adminAgent, coderAgent, codeReviewAgent, runner);
+        }
+
+        private Graph SetupWorkflow(AgentCollection agents)
+        {
+            var adminToCoderTransition = Transition.Create(agents.AdminAgent, agents.CoderAgent, async (from, to, messages) =>
+                await Task.FromResult(messages.Last().From == agents.AdminAgent.Name));
+
+            var coderToReviewerTransition = Transition.Create(agents.CoderAgent, agents.CodeReviewAgent);
+
+            var adminToRunnerTransition = Transition.Create(agents.AdminAgent, agents.Runner, async (from, to, messages) =>
+                await Task.FromResult(messages.Last().From == agents.AdminAgent.Name && messages.Any(x => x.From == agents.CoderAgent.Name)));
+
+            var runnerToAdminTransition = Transition.Create(agents.Runner, agents.AdminAgent);
+
+            var reviewerToAdminTransition = Transition.Create(agents.CodeReviewAgent, agents.AdminAgent);
+
+            var adminToUserTransition = Transition.Create(agents.AdminAgent, agents.UserProxy, async (from, to, messages) =>
+                await Task.FromResult(messages.Last().From == agents.AdminAgent.Name));
+
+            var userToAdminTransition = Transition.Create(agents.UserProxy, agents.AdminAgent);
+
+            return new Graph(new[]
             {
-                return false;
-            }
-
-            return true;
-        });
-
-        var userToAdminTransition = Transition.Create(userProxy, admin);
-
-        var workflow = new Graph(
-            [
                 adminToCoderTransition,
                 coderToReviewerTransition,
                 reviewerToAdminTransition,
@@ -230,55 +238,50 @@ public partial class Dynamic_GroupChat_Coding_Task
                 runnerToAdminTransition,
                 adminToUserTransition,
                 userToAdminTransition,
-            ]);
+            });
+        }
 
-        // create group chat
-        var groupChat = new GroupChat(
-            admin: groupAdmin,
-            members: [admin, coderAgent, runner, codeReviewAgent, userProxy],
-            workflow: workflow);
+        private string ConstructUserQuery(FileContents fileContents)
+        {
+            return $$"""
+    Please rewrite this Oracle PL/SQL function into a dotnet code function. Code should be written as a single program.
+    The function should return the results as a logical structure. Then print it similar to the PL/SQL output.
 
-        // task 1: retrieve the most recent pr from mlnet and save it in result.txt
-        var groupChatManager = new GroupChatManager(groupChat);
-        await userProxy.SendAsync(groupChatManager, $$"""
-            Please rewerite this Oracle PL/SQL function into a dotnet code function. Code should be written as a single program.
-            The function should return the results as a logical structure. Then print it similar to the PL/SQL output.
+    PL/SQL function:
+    ```
+    {{fileContents.PlSqlScript}}
+    ```
 
-            PL/SQL function:
-             ```
-            {{plsqlScript}}
-             ```
+    For context, here's the tables used in the PL/SQL function:
+    ```
+    {{fileContents.TablesScript}}
+    ```
 
-            For context, here's the tables used in the PL/SQL function:
-            ```
-            {{tablesScript}}
-            ```
+    This is for testing purpose, so you don't need to make code for connecting to Oracle database. Instead use the data from the following csv data when testing logic. The csv data contains the following data:
+    departments.csv:
+    ```
+    {{fileContents.DepartmentsData}}
+    ```
+    employees.csv:
+    ```
+    {{fileContents.EmployeesData}}
+    ```
+    salaries.csv:
+    ```
+    {{fileContents.SalariesData}}
+    ```
 
-            This is for testing purpose, so you don't need to make code for connecting to Oracle database. Instead use the data from the following csv data when testing logic. The csv data contains the following data:
-            departments.csv:
-            ```
-            {{departmentsData}}
-            ```
-            employees.csv:
-            ```
-            {{employeesData}}
-            ```
-            salaries.csv:
-            ```
-            {{salariesData}}
-            ```
+    When you are satisfied with the code, send the code to runner to run the code and present the result to user. For the test use hardcoded CSV data provided above. No need for logic reading for CSV-files.
+    Logic should be written so it can easily be changed to read from the production Oracle database. That solution will use entity framework to read data from Oracle database and LINQ to query the data.
+    Use record type instead of class for the data structure. This needs to be included in a single program.
 
-            When you are satisfied with the code, send the code to runner to run the code and present the result to user. For the test use hardcoded CSV data provided above. No need for logic reading for CSV-files.
-            Logic should be written so it can easiliy be changed to read from the production Oracle database. That solution will use entity framework to read data from Oracle database and LINQ to query the data.
-            Use record type instead of class for the data structure. This needs to be included in a single program.
-
-            The expected output for Department 1 should be:
-            ```
-            Emp ID: 201, Name: John Doe, Salary: 50000, Bonus: 5000
-            Emp ID: 202, Name: Jane Smith, Salary: 55000, Bonus: 5500
-            Total Salary for Department 1: 115500
-            ```
-
-            """, maxRound: 30);
+    The expected output for Department 1 should be:
+    ```
+    Emp ID: 201, Name: John Doe, Salary: 50000, Bonus: 5000
+    Emp ID: 202, Name: Jane Smith, Salary: 55000, Bonus: 5500
+    Total Salary for Department 1: 115500
+    ```
+    """;
+        }
     }
 }
