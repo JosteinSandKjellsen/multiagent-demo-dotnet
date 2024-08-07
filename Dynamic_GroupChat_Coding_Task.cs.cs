@@ -96,7 +96,7 @@ namespace AutoGen.BasicSample
             ```
         """;
 
-        public async Task RunAsync()
+        public static async Task RunAsync()
         {
             var fileContents = await ReadAllRequiredFilesAsync();
             var gptConfiguration = LLMConfiguration.GetAzureOpenAIGPT4();
@@ -118,7 +118,7 @@ namespace AutoGen.BasicSample
 
         private record FileContents(string PlSqlScript, string TablesScript, string DepartmentsData, string EmployeesData, string SalariesData);
 
-        private async Task<FileContents> ReadAllRequiredFilesAsync()
+        private static async Task<FileContents> ReadAllRequiredFilesAsync()
         {
             var filePaths = new Dictionary<string, string>
             {
@@ -141,7 +141,7 @@ namespace AutoGen.BasicSample
             );
         }
 
-        private async Task<InteractiveService> SetupInteractiveServiceAsync()
+        private static async Task<InteractiveService> SetupInteractiveServiceAsync()
         {
             var workDir = Path.Combine(Path.GetTempPath(), "InteractiveService");
             Directory.CreateDirectory(workDir);
@@ -160,7 +160,7 @@ namespace AutoGen.BasicSample
             IAgent Runner
         );
 
-        private AgentCollection SetupAgents(AzureOpenAIConfig gptConfiguration, InteractiveService interactiveService)
+        private static AgentCollection SetupAgents(AzureOpenAIConfig gptConfiguration, InteractiveService interactiveService)
         {
             var groupAdmin = new GPTAgent(
                 name: "groupAdmin",
@@ -203,14 +203,14 @@ namespace AutoGen.BasicSample
                 .RegisterMiddleware(async (msgs, option, agent, ct) =>
                 {
                     var mostRecentCoderMessage = msgs.LastOrDefault(x => x.From == "coder") ?? throw new Exception("No coder message found");
-                    return await agent.GenerateReplyAsync(new[] { mostRecentCoderMessage }, option, ct);
+                    return await agent.GenerateReplyAsync([mostRecentCoderMessage], option, ct);
                 })
                 .RegisterPrintMessage();
 
             return new AgentCollection(groupAdmin, userProxy, adminAgent, coderAgent, codeReviewAgent, runner);
         }
 
-        private Graph SetupWorkflow(AgentCollection agents)
+        private static Graph SetupWorkflow(AgentCollection agents)
         {
             var adminToCoderTransition = Transition.Create(agents.AdminAgent, agents.CoderAgent, async (from, to, messages) =>
                 await Task.FromResult(messages.Last().From == agents.AdminAgent.Name));
@@ -241,7 +241,7 @@ namespace AutoGen.BasicSample
             ]);
         }
 
-        private string ConstructUserQuery(FileContents fileContents) => $$"""
+        private static string ConstructUserQuery(FileContents fileContents) => $$"""
             Please rewrite this Oracle PL/SQL function into a dotnet code function. Code should be written as a single program.
             The function should return the results as a logical structure. Then print it similar to the PL/SQL output.
 
