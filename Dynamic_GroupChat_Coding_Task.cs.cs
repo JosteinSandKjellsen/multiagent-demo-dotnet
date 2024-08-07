@@ -229,8 +229,8 @@ namespace AutoGen.BasicSample
 
             var userToAdminTransition = Transition.Create(agents.UserProxy, agents.AdminAgent);
 
-            return new Graph(new[]
-            {
+            return new Graph(
+            [
                 adminToCoderTransition,
                 coderToReviewerTransition,
                 reviewerToAdminTransition,
@@ -238,50 +238,47 @@ namespace AutoGen.BasicSample
                 runnerToAdminTransition,
                 adminToUserTransition,
                 userToAdminTransition,
-            });
+            ]);
         }
 
-        private string ConstructUserQuery(FileContents fileContents)
-        {
-            return $$"""
-    Please rewrite this Oracle PL/SQL function into a dotnet code function. Code should be written as a single program.
-    The function should return the results as a logical structure. Then print it similar to the PL/SQL output.
+        private string ConstructUserQuery(FileContents fileContents) => $$"""
+            Please rewrite this Oracle PL/SQL function into a dotnet code function. Code should be written as a single program.
+            The function should return the results as a logical structure. Then print it similar to the PL/SQL output.
 
-    PL/SQL function:
-    ```
-    {{fileContents.PlSqlScript}}
-    ```
+            PL/SQL function:
+            ```
+            {{fileContents.PlSqlScript}}
+            ```
 
-    For context, here's the tables used in the PL/SQL function:
-    ```
-    {{fileContents.TablesScript}}
-    ```
+            For context, here's the tables used in the PL/SQL function:
+            ```
+            {{fileContents.TablesScript}}
+            ```
 
-    This is for testing purpose, so you don't need to make code for connecting to Oracle database. Instead use the data from the following csv data when testing logic. The csv data contains the following data:
-    departments.csv:
-    ```
-    {{fileContents.DepartmentsData}}
-    ```
-    employees.csv:
-    ```
-    {{fileContents.EmployeesData}}
-    ```
-    salaries.csv:
-    ```
-    {{fileContents.SalariesData}}
-    ```
+            This is for testing purpose, so you don't need to make code for connecting to Oracle database. Instead use the data from the following csv data when testing logic. The csv data contains the following data:
+            departments.csv:
+            ```
+            {{fileContents.DepartmentsData}}
+            ```
+            employees.csv:
+            ```
+            {{fileContents.EmployeesData}}
+            ```
+            salaries.csv:
+            ```
+            {{fileContents.SalariesData}}
+            ```
 
-    When you are satisfied with the code, send the code to runner to run the code and present the result to user. For the test use hardcoded CSV data provided above. No need for logic reading for CSV-files.
-    Logic should be written so it can easily be changed to read from the production Oracle database. That solution will use entity framework to read data from Oracle database and LINQ to query the data.
-    Use record type instead of class for the data structure. This needs to be included in a single program.
+            When you are satisfied with the code, send the code to runner to run the code and present the result to user. For the test use hardcoded CSV data provided above. No need for logic reading for CSV-files.
+            Logic should be written so it can easily be changed to read from the production Oracle database. That solution will use entity framework to read data from Oracle database and LINQ to query the data.
+            Use record type instead of class for the data structure. This needs to be included in a single program.
 
-    The expected output for Department 1 should be:
-    ```
-    Emp ID: 201, Name: John Doe, Salary: 50000, Bonus: 5000
-    Emp ID: 202, Name: Jane Smith, Salary: 55000, Bonus: 5500
-    Total Salary for Department 1: 115500
-    ```
-    """;
-        }
+            The expected output for Department 1 should be:
+            ```
+            Emp ID: 201, Name: John Doe, Salary: 50000, Bonus: 5000
+            Emp ID: 202, Name: Jane Smith, Salary: 55000, Bonus: 5500
+            Total Salary for Department 1: 115500
+            ```
+            """;
     }
 }

@@ -30,7 +30,7 @@ internal static class LLMConfiguration
         return new AzureOpenAIConfig(endpoint, deployName, azureOpenAIKey);
     }
 
-    public static AzureOpenAIConfig GetAzureOpenAIGPT4(string deployName = "gpt-4")
+    public static AzureOpenAIConfig GetAzureOpenAIGPT4(string deployName = "gpt-4o-mini")
     {
         var azureOpenAIKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY") ?? throw new Exception("Please set AZURE_OPENAI_API_KEY environment variable.");
         var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT") ?? throw new Exception("Please set AZURE_OPENAI_ENDPOINT environment variable.");
